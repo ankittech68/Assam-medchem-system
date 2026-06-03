@@ -4,7 +4,22 @@ import { Pool } from "pg";
 
 const prismaClientSingleton = () => {
   const connectionString = process.env.DATABASE_URL;
-  const pool = new Pool({ connectionString });
+  
+  if (!connectionString) {
+    // During build time on Vercel, DATABASE_URL might be missing.
+    // Return standard PrismaClient to allow successful build.
+    return new PrismaClient();
+  }
+
+  // Optimize for serverless: set connection pool max limits
+  // to avoid exhausting Neon connection pool.
+  const pool = new Pool({ 
+    connectionString,
+    max: 2,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
+  });
+  
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 };
