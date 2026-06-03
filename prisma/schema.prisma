@@ -1,0 +1,170 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  SELLER
+  USER
+}
+
+enum Unit {
+  G     // Gram
+  KG    // Kilogram
+  ML    // Milliliter
+  L     // Liter
+  ITEM  // Count (discrete items)
+}
+
+enum InventoryStatus {
+  AVAILABLE
+  RESTRICTED
+  EXPIRED
+}
+
+enum OrderStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String?
+  email        String        @unique
+  password     String
+  role         Role          @default(USER)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  orders       Order[]
+  quotations   Quotation[]
+  activityLogs ActivityLog[]
+
+  @@index([email])
+}
+
+model Product {
+  id             String          @id @default(uuid())
+  name           String
+  formula        String          // e.g. H2O, NaOH
+  casNumber      String?         // e.g. 64-17-5
+  description    String?
+  grade          String?         // e.g. Analytical Reagent, Technical
+  unit           Unit            @default(ITEM)
+  price          Decimal         @db.Decimal(12, 4) // Catalog price per unit
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  inventories    Inventory[]
+  orderItems     OrderItem[]
+  quotationItems QuotationItem[]
+
+  @@index([name])
+  @@index([casNumber])
+}
+
+model Inventory {
+  id                String          @id @default(uuid())
+  productId         String
+  product           Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batchNumber       String          // Specific batch for tracing
+  warehouseLocation String?         // Coordinate location
+  expiryDate        DateTime?
+  status            InventoryStatus @default(AVAILABLE)
+  quantity          Decimal         @db.Decimal(12, 4) // Stock quantity in this specific batch
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([productId])
+  @@index([productId, status])
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  orderNumber String      @unique
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      OrderStatus @default(PENDING)
+  totalAmount Decimal     @db.Decimal(16, 4)
+  clientName  String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       OrderItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Decimal  @db.Decimal(12, 4)
+  price     Decimal  @db.Decimal(12, 4) // Agreed price at purchase
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([orderId, productId])
+}
+
+model Quotation {
+  id              String          @id @default(uuid())
+  quotationNumber String          @unique
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status          QuotationStatus @default(DRAFT)
+  totalAmount     Decimal         @db.Decimal(16, 4)
+  clientName      String          // Name of requesting client
+  validUntil      DateTime
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  items           QuotationItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([validUntil])
+}
+
+model QuotationItem {
+  id          String    @id @default(uuid())
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity    Decimal   @db.Decimal(12, 4)
+  price       Decimal   @db.Decimal(12, 4) // Quoted unit price
+  createdAt   DateTime  @default(now())
+
+  @@index([quotationId])
+  @@index([quotationId, productId])
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  details   String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
